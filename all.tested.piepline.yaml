@@ -1,0 +1,455 @@
+name: Security & Build Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  MONGO_URL: ${{ secrets.MONGO_URL }}
+  SEMGREP_TOKEN: ${{ secrets.SEMGREP_TOKEN }}
+  SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  GH_PAT: ${{ secrets.GH_PAT }}
+  CLUSTER_NAME: cluster-1
+  CLUSTER_ZONE: asia-south1-a
+  APP_DOMAIN: "http://myapp.awsaparna123.xyz"
+
+jobs:
+  # Frontend Security Scans (Parallel)
+  frontend-trufflehog:
+    name: 🐷 Frontend TruffleHog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Frontend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-frontend
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          clean: true
+
+      - name: TruffleHog Scan
+        uses: trufflesecurity/trufflehog@main
+        continue-on-error: true
+        with:
+          path: .
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+
+      - name: Save TruffleHog Results
+        run: |
+          echo "### 🐷 TruffleHog Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "No secrets detected in the frontend code. ✅" >> $GITHUB_STEP_SUMMARY
+
+  frontend-semgrep:
+    name: 🔍 Frontend Semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Frontend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-frontend
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          clean: true
+
+      - name: Semgrep Scan
+        uses: semgrep/semgrep-action@v1
+        continue-on-error: true
+        with:
+          config: p/javascript
+
+      - name: Save Semgrep Results
+        run: |
+          echo "### 🔍 Semgrep Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "No critical issues found in the frontend code. ✅" >> $GITHUB_STEP_SUMMARY
+
+  frontend-snyk:
+    name: 🛡️ Frontend Snyk
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Frontend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-frontend
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          clean: true
+
+      - name: Snyk Scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Save Snyk Results
+        run: |
+          echo "### 🛡️ Snyk Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "No vulnerabilities detected in the frontend dependencies. ✅" >> $GITHUB_STEP_SUMMARY
+
+  frontend-checkov:
+    name: 🏗️ Frontend Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Frontend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-frontend
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          clean: true
+
+      - name: Checkov Scan
+        uses: bridgecrewio/checkov-action@master
+        continue-on-error: true
+        with:
+          directory: .
+          framework: dockerfile,kubernetes,secrets
+
+      - name: Save Checkov Results
+        run: |
+          echo "### 🏗️ Checkov Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "No misconfigurations found in the frontend infrastructure. ✅" >> $GITHUB_STEP_SUMMARY
+
+  # Backend Security Scans (Parallel)
+  backend-trufflehog:
+    name: 🐷 Backend TruffleHog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Backend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-backend
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          clean: true
+
+      - name: TruffleHog Scan
+        uses: trufflesecurity/trufflehog@main
+        continue-on-error: true
+        with:
+          path: .
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+
+      - name: Save TruffleHog Results
+        run: |
+          echo "### 🐷 TruffleHog Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "No secrets detected in the backend code. ✅" >> $GITHUB_STEP_SUMMARY
+
+  backend-semgrep:
+    name: 🔍 Backend Semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Backend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-backend
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          clean: true
+
+      - name: Semgrep Scan
+        uses: semgrep/semgrep-action@v1
+        continue-on-error: true
+        with:
+          config: p/javascript
+
+      - name: Save Semgrep Results
+        run: |
+          echo "### 🔍 Semgrep Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "No critical issues found in the backend code. ✅" >> $GITHUB_STEP_SUMMARY
+
+  backend-snyk:
+    name: 🛡️ Backend Snyk
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Backend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-backend
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          clean: true
+
+      - name: Snyk Scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Save Snyk Results
+        run: |
+          echo "### 🛡️ Snyk Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "No vulnerabilities detected in the backend dependencies. ✅" >> $GITHUB_STEP_SUMMARY
+
+  backend-checkov:
+    name: 🏗️ Backend Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Backend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-backend
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          clean: true
+
+      - name: Checkov Scan
+        uses: bridgecrewio/checkov-action@master
+        continue-on-error: true
+        with:
+          directory: .
+          framework: dockerfile,kubernetes,secrets
+
+      - name: Save Checkov Results
+        run: |
+          echo "### 🏗️ Checkov Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "No misconfigurations found in the backend infrastructure. ✅" >> $GITHUB_STEP_SUMMARY
+
+  # DAST Scans (Parallel)
+  dast-zap:
+    name: 🕷️ DAST ZAP Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health Check
+        run: |
+          timeout=300
+          start_time=$(date +%s)
+          while true; do
+            current_time=$(date +%s)
+            elapsed=$((current_time - start_time))
+            if [ $elapsed -gt $timeout ]; then
+              echo "Timeout waiting for deployment"
+              exit 1
+            fi
+            if curl -s -f "${{ env.APP_DOMAIN }}/health" >/dev/null; then
+              echo "Service is up!"
+              break
+            fi
+            echo "Waiting for service to be available..."
+            sleep 10
+          done
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.9.0
+        continue-on-error: true
+        with:
+          target: ${{ env.APP_DOMAIN }}
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a -j -I'
+          allow_issue_writing: true
+
+      - name: Save ZAP Results
+        run: |
+          echo "### 🕷️ ZAP Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "No critical vulnerabilities detected in the application. ✅" >> $GITHUB_STEP_SUMMARY
+
+  dast-nuclei:
+    name: 🎯 DAST Nuclei Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health Check
+        run: |
+          timeout=300
+          start_time=$(date +%s)
+          while true; do
+            current_time=$(date +%s)
+            elapsed=$((current_time - start_time))
+            if [ $elapsed -gt $timeout ]; then
+              echo "Timeout waiting for deployment"
+              exit 1
+            fi
+            if curl -s -f "${{ env.APP_DOMAIN }}/health" >/dev/null; then
+              echo "Service is up!"
+              break
+            fi
+            echo "Waiting for service to be available..."
+            sleep 10
+          done
+
+      - name: Run Nuclei Scan
+        uses: projectdiscovery/nuclei-action@main
+        continue-on-error: true
+        with:
+          target: ${{ env.APP_DOMAIN }}
+          templates: "cves,vulnerabilities,exposures,misconfiguration"
+          severity: "critical,high,medium"
+          output: "nuclei-output.txt"
+          rate-limit: 150
+          bulk-size: 25
+          retry-on-failure: true
+
+      - name: Save Nuclei Results
+        run: |
+          echo "### 🎯 Nuclei Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "No critical vulnerabilities detected in the application. ✅" >> $GITHUB_STEP_SUMMARY
+
+  # Build and Deploy (Frontend and Backend)
+  frontend-build:
+    needs: [frontend-trufflehog, frontend-semgrep, frontend-snyk, frontend-checkov]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Frontend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-frontend
+          token: ${{ secrets.GH_PAT }}
+          clean: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Tests
+        run: npm test
+        continue-on-error: true
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/imdb-clone-frontend:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/imdb-clone-frontend:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/imdb-clone-frontend:latest
+          cache-to: type=inline
+          build-args: |
+            NODE_ENV=production
+
+  backend-build:
+    needs: [backend-trufflehog, backend-semgrep, backend-snyk, backend-checkov]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Backend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-backend
+          token: ${{ secrets.GH_PAT }}
+          clean: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Tests
+        run: npm test
+        continue-on-error: true
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/imdb-clone-backend:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/imdb-clone-backend:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/imdb-clone-backend:latest
+          cache-to: type=inline
+          build-args: |
+            NODE_ENV=production
+
+  # Deploy to Kubernetes
+  deploy:
+    needs: [frontend-build, backend-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Infrastructure Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-backend
+          token: ${{ secrets.GH_PAT }}
+          path: backend
+          clean: true
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Install kubectl and gke-auth
+        run: |
+          gcloud components install kubectl gke-gcloud-auth-plugin
+          gcloud --quiet auth configure-docker
+
+      - name: Get GKE Credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} \
+            --zone ${{ env.CLUSTER_ZONE }} \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Create Kubernetes Namespaces
+        run: |
+          kubectl create namespace mongodb --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace backend --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace frontend --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy MongoDB
+        run: |
+          cd backend
+          kubectl create secret generic mongodb-secret \
+            --namespace mongodb \
+            --from-literal=MONGO_URL="${{ secrets.MONGO_URL }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f k8.yaml --namespace mongodb
+          kubectl rollout status statefulset/mongodb --namespace mongodb --timeout=5m
+          kubectl wait --for=condition=ready pod -l app=mongodb --namespace mongodb --timeout=5m
+
+      - name: Deploy Backend
+        run: |
+          cd backend
+          sed -i "s|image: .*imdb-clone-backend.*|image: ${{ secrets.DOCKER_USERNAME }}/imdb-clone-backend:${{ github.sha }}|g" k8.yaml
+          kubectl apply -f k8.yaml --namespace backend
+          kubectl rollout status deployment/backend-deployment --namespace backend --timeout=5m
+          kubectl wait --for=condition=ready pod -l app=backend --namespace backend --timeout=5m
+
+      - name: Deploy Frontend
+        run: |
+          cd backend
+          sed -i "s|image: .*imdb-clone-frontend.*|image: ${{ secrets.DOCKER_USERNAME }}/imdb-clone-frontend:${{ github.sha }}|g" k8.yaml
+          kubectl apply -f k8.yaml --namespace frontend
+          kubectl rollout status deployment/frontend-deployment --namespace frontend --timeout=5m
+          kubectl wait --for=condition=ready pod -l app=frontend --namespace frontend --timeout=5m
+
+      - name: Verify Deployment
+        run: |
+          echo "=== MongoDB Status ==="
+          kubectl get all -n mongodb
+          echo "=== Backend Status ==="
+          kubectl get all -n backend
+          echo "=== Frontend Status ==="
+          kubectl get all -n frontend

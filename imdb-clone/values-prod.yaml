@@ -1,0 +1,78 @@
+# values-prod.yaml
+global:
+  namespace: production
+  environment: production
+
+mongodb:
+  database: "imdb"
+  image:
+    repository: bitnami/mongodb
+    tag: 6.0.5-debian-11-r4
+  securityContext:
+    enabled: true
+    runAsUser: 1001
+    fsGroup: 1001
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+
+backend:
+  replicaCount: 1
+  image:
+    repository: jai3747/imdb-clone-backend-prod
+    tag: latest
+    pullPolicy: Always
+    mongoUrl: "mongodb+srv://JAYACHANDRAN:KQJrxDn44181NsqT@cluster0.w45he.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+  service:
+    type: ClusterIP
+    port: 5000
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+  probes:
+    readiness:
+      initialDelaySeconds: 20
+      periodSeconds: 20
+    liveness:
+      initialDelaySeconds: 25
+      periodSeconds: 30
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: jai3747/imdb-clone-frontend-prod
+    tag: latest
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+  probes:
+    readiness:
+      initialDelaySeconds: 20
+      periodSeconds: 20
+    liveness:
+      initialDelaySeconds: 25
+      periodSeconds: 30
+
+ingress:
+  enabled: true
+  className: nginx
+  sslRedirect: true
+  frontendDomain: "prod-frontend.jayachandran.xyz"
+  backendDomain: "prod-backend.jayachandran.xyz"

@@ -1,0 +1,384 @@
+name: Security & Build Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  MONGO_URL: ${{ secrets.MONGO_URL }}
+  SEMGREP_TOKEN: ${{ secrets.SEMGREP_TOKEN }}
+  SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  GH_PAT: ${{ secrets.GH_PAT }}
+  CLUSTER_NAME: cluster-1
+  CLUSTER_ZONE: asia-south1-a
+
+jobs:
+  frontend-security:
+    name: Frontend Security Scans
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Frontend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-frontend
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          clean: true
+
+      - name: TruffleHog Scan
+        uses: trufflesecurity/trufflehog@main
+        continue-on-error: true
+        with:
+          path: .
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+
+      - name: SAST Scan
+        uses: semgrep/semgrep-action@v1
+        continue-on-error: true
+        with:
+          config: p/javascript
+
+      - name: Snyk Scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Checkov IaC Scan
+        uses: bridgecrewio/checkov-action@master
+        continue-on-error: true
+        with:
+          directory: .
+          framework: dockerfile,kubernetes,secrets
+
+  backend-security:
+    name: Backend Security Scans
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Backend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-backend
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          clean: true
+
+      - name: TruffleHog Scan
+        uses: trufflesecurity/trufflehog@main
+        continue-on-error: true
+        with:
+          path: .
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+
+      - name: SAST Scan
+        uses: semgrep/semgrep-action@v1
+        continue-on-error: true
+        with:
+          config: p/javascript
+
+      - name: Snyk Scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Checkov IaC Scan
+        uses: bridgecrewio/checkov-action@master
+        continue-on-error: true
+        with:
+          directory: .
+          framework: dockerfile,kubernetes,secrets
+
+  frontend-build:
+    needs: [frontend-security]
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.set_output.outputs.image_tag }}
+    steps:
+      - name: Checkout Frontend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-frontend
+          token: ${{ secrets.GH_PAT }}
+          clean: true
+
+      - name: Generate Image Tag
+        id: set_output
+        run: echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Tests
+        run: npm test
+        continue-on-error: true
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/imdb-clone-frontend:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/imdb-clone-frontend:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/imdb-clone-frontend:latest
+          cache-to: type=inline
+          build-args: |
+            NODE_ENV=production
+
+      - name: Trivy Frontend Scan
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          image-ref: '${{ secrets.DOCKER_USERNAME }}/imdb-clone-frontend:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+  backend-build:
+    needs: [backend-security]
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.set_output.outputs.image_tag }}
+    steps:
+      - name: Checkout Backend Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-backend
+          token: ${{ secrets.GH_PAT }}
+          clean: true
+
+      - name: Generate Image Tag
+        id: set_output
+        run: echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Tests
+        run: npm test
+        continue-on-error: true
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/imdb-clone-backend:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/imdb-clone-backend:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/imdb-clone-backend:latest
+          cache-to: type=inline
+          build-args: |
+            NODE_ENV=production
+
+      - name: Trivy Backend Scan
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          image-ref: '${{ secrets.DOCKER_USERNAME }}/imdb-clone-backend:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+  deploy:
+    needs: [frontend-build, backend-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Infrastructure Code
+        uses: actions/checkout@v3
+        with:
+          repository: jai3747/imdb-clone-backend
+          token: ${{ secrets.GH_PAT }}
+          path: backend
+          clean: true
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Install kubectl and gke-auth
+        run: |
+          gcloud components install kubectl gke-gcloud-auth-plugin
+          gcloud --quiet auth configure-docker
+
+      - name: Get GKE Credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} \
+            --zone ${{ env.CLUSTER_ZONE }} \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Create Kubernetes Namespaces
+        run: |
+          kubectl create namespace mongodb --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace backend --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace frontend --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy MongoDB
+        run: |
+          cd backend
+          
+          # Create MongoDB Secret
+          kubectl create secret generic mongodb-secret \
+            --namespace mongodb \
+            --from-literal=MONGO_URL="${{ secrets.MONGO_URL }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          # Apply MongoDB StatefulSet and related resources
+          kubectl apply -f k8.yaml --namespace mongodb
+          
+          # Wait for MongoDB StatefulSet rollout
+          kubectl rollout status statefulset/mongodb --namespace mongodb --timeout=5m
+          
+          # Verify MongoDB pods are ready
+          kubectl wait --for=condition=ready pod -l app=mongodb --namespace mongodb --timeout=5m
+
+      - name: Deploy Backend
+        run: |
+          cd backend
+          
+          # Update backend image in deployment
+          sed -i "s|image: .*imdb-clone-backend.*|image: ${{ secrets.DOCKER_USERNAME }}/imdb-clone-backend:${{ needs.backend-build.outputs.image_tag }}|g" k8.yaml
+          
+          # Apply backend resources
+          kubectl apply -f k8.yaml --namespace backend
+          
+          # Wait for backend deployment rollout
+          kubectl rollout status deployment/backend-deployment --namespace backend --timeout=5m
+          
+          # Verify backend pods are ready
+          kubectl wait --for=condition=ready pod -l app=backend --namespace backend --timeout=5m
+          
+          # Get backend service IP for frontend config
+          BACKEND_IP=$(kubectl get svc backend-service --namespace backend -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Backend Service IP: $BACKEND_IP"
+          
+          # Update frontend config with backend URL
+          kubectl create configmap frontend-config \
+            --namespace frontend \
+            --from-literal=REACT_APP_BACKEND_API="http://$BACKEND_IP:5000/api" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy Frontend
+        run: |
+          cd backend
+          
+          # Update frontend image in deployment
+          sed -i "s|image: .*imdb-clone-frontend.*|image: ${{ secrets.DOCKER_USERNAME }}/imdb-clone-frontend:${{ needs.frontend-build.outputs.image_tag }}|g" k8.yaml
+          
+          # Apply frontend resources
+          kubectl apply -f k8.yaml --namespace frontend
+          
+          # Wait for frontend deployment rollout
+          kubectl rollout status deployment/frontend-deployment --namespace frontend --timeout=5m
+          
+          # Verify frontend pods are ready
+          kubectl wait --for=condition=ready pod -l app=frontend --namespace frontend --timeout=5m
+
+      - name: Verify Deployment
+        run: |
+          echo "=== MongoDB Status ==="
+          kubectl get all -n mongodb
+          
+          echo "=== Backend Status ==="
+          kubectl get all -n backend
+          
+          echo "=== Frontend Status ==="
+          kubectl get all -n frontend
+          
+          echo "=== Service Endpoints ==="
+          kubectl get svc -A | grep -E 'frontend-service|backend-service'
+          
+          echo "=== Recent Events ==="
+          kubectl get events --sort-by='.lastTimestamp' -A | tail -n 10
+
+      - name: Health Check
+        run: |
+          # Function to check namespace health
+          check_namespace() {
+            namespace=$1
+            echo "Checking $namespace namespace..."
+            
+            # Check pods
+            if [ $(kubectl get pods -n $namespace -o jsonpath='{.items[?(@.status.phase!="Running")].metadata.name}' | wc -w) -ne 0 ]; then
+              echo "❌ Some pods in $namespace are not running:"
+              kubectl get pods -n $namespace
+              return 1
+            fi
+            
+            # Check deployments
+            if [ $(kubectl get deploy -n $namespace -o jsonpath='{.items[?(@.status.availableReplicas<@.status.replicas)].metadata.name}' | wc -w) -ne 0 ]; then
+              echo "❌ Some deployments in $namespace are not fully available:"
+              kubectl get deploy -n $namespace
+              return 1
+            fi
+            
+            echo "✅ $namespace health check passed"
+            return 0
+          }
+          
+          # Check each namespace
+          check_namespace "mongodb" && \
+          check_namespace "backend" && \
+          check_namespace "frontend" || \
+          (echo "❌ Health check failed" && exit 1)
+          
+          echo "✅ All health checks passed"
+
+      - name: Cleanup
+        if: failure()
+        run: |
+          echo "Collecting logs for debugging..."
+          
+          for ns in mongodb backend frontend; do
+            echo "=== Logs from $ns namespace ==="
+            kubectl get all -n $ns
+            kubectl get events -n $ns --sort-by='.lastTimestamp'
+            
+            # Get logs from all pods in namespace
+            for pod in $(kubectl get pods -n $ns -o name); do
+              echo "=== Logs from $pod ==="
+              kubectl logs $pod -n $ns --tail=100 || true
+            done
+          done
