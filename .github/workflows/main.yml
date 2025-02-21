@@ -345,7 +345,7 @@ jobs:
 
 
 
-   frontend-build:
+  frontend-build:
     runs-on: ubuntu-latest
     steps:
     - name: Clean workspace
