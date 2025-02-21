@@ -345,45 +345,30 @@ jobs:
 
 
 
-
-  frontend-build:
+   frontend-build:
     runs-on: ubuntu-latest
     steps:
     - name: Clean workspace
       run: |
-        rm -rf *
-        rm -rf .git
+        rm -rf ./*
+        rm -rf ./.* || true
         
-    - name: Create temp directory for build
-      run: mkdir -p /tmp/build-frontend
-
     - name: Checkout Frontend Code
       uses: actions/checkout@v4
       with:
         repository: jai3747/imdbclone-frontend
         token: ${{ secrets.GH_PAT }}
         clean: true
-        force: true
-        path: /tmp/build-frontend
+        fetch-depth: 1
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: "18"
         cache: 'npm'
-        cache-dependency-path: '/tmp/build-frontend/package-lock.json'
-
-    - name: Cache npm dependencies
-      uses: actions/cache@v3
-      id: npm-cache
-      with:
-        path: ~/.npm
-        key: ${{ runner.os }}-npm-${{ hashFiles('/tmp/build-frontend/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-npm-
+        cache-dependency-path: './package-lock.json'
 
     - name: Install Frontend Dependencies
-      working-directory: /tmp/build-frontend
       run: |
         npm install --legacy-peer-deps
         npm cache verify
@@ -400,7 +385,7 @@ jobs:
     - name: Build and Push Frontend Image
       uses: docker/build-push-action@v5
       with:
-        context: /tmp/build-frontend
+        context: .
         push: true
         tags: ${{ env.FRONTEND_IMAGE }}:latest
         build-args: |
@@ -413,39 +398,25 @@ jobs:
     steps:
     - name: Clean workspace
       run: |
-        rm -rf *
-        rm -rf .git
+        rm -rf ./*
+        rm -rf ./.* || true
         
-    - name: Create temp directory for build
-      run: mkdir -p /tmp/build-backend
-
     - name: Checkout Backend Code
       uses: actions/checkout@v4
       with:
         repository: jai3747/imdbclone-backend
         token: ${{ secrets.GH_PAT }}
         clean: true
-        force: true
-        path: /tmp/build-backend
+        fetch-depth: 1
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: "18"
         cache: 'npm'
-        cache-dependency-path: '/tmp/build-backend/package-lock.json'
-
-    - name: Cache npm dependencies
-      uses: actions/cache@v3
-      id: npm-cache
-      with:
-        path: ~/.npm
-        key: ${{ runner.os }}-npm-${{ hashFiles('/tmp/build-backend/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-npm-
+        cache-dependency-path: './package-lock.json'
 
     - name: Install Backend Dependencies
-      working-directory: /tmp/build-backend
       run: |
         npm install
         npm cache verify
@@ -462,13 +433,14 @@ jobs:
     - name: Build and Push Backend Image
       uses: docker/build-push-action@v5
       with:
-        context: /tmp/build-backend
+        context: .
         push: true
         tags: ${{ env.BACKEND_IMAGE }}:latest
         build-args: |
           NODE_ENV=production
         cache-from: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache
-        cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max 
+        cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max
+  
   deploy:
     needs: [frontend-build, backend-build]
     runs-on: ubuntu-latest
