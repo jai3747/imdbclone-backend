@@ -343,6 +343,9 @@ jobs:
         path: kubesec-backend-*.json
         retention-days: 30
 
+
+
+
   frontend-build:
     runs-on: ubuntu-latest
     steps:
@@ -350,6 +353,10 @@ jobs:
       run: |
         rm -rf *
         rm -rf .git
+        
+    - name: Create temp directory for build
+      run: mkdir -p /tmp/build-frontend
+
     - name: Checkout Frontend Code
       uses: actions/checkout@v4
       with:
@@ -357,41 +364,29 @@ jobs:
         token: ${{ secrets.GH_PAT }}
         clean: true
         force: true
+        path: /tmp/build-frontend
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: "18"
         cache: 'npm'
-        cache-dependency-path: '**/package-lock.json'
-
-    - name: Get npm cache directory
-      id: npm-cache-dir
-      shell: bash
-      run: echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+        cache-dependency-path: '/tmp/build-frontend/package-lock.json'
 
     - name: Cache npm dependencies
       uses: actions/cache@v3
       id: npm-cache
       with:
-        path: ${{ steps.npm-cache-dir.outputs.dir }}
-        key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+        path: ~/.npm
+        key: ${{ runner.os }}-npm-${{ hashFiles('/tmp/build-frontend/package-lock.json') }}
         restore-keys: |
           ${{ runner.os }}-npm-
 
     - name: Install Frontend Dependencies
-      if: steps.npm-cache.outputs.cache-hit != 'true'
+      working-directory: /tmp/build-frontend
       run: |
         npm install --legacy-peer-deps
         npm cache verify
-
-    - name: Cache Docker layers
-      uses: actions/cache@v3
-      with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -405,16 +400,13 @@ jobs:
     - name: Build and Push Frontend Image
       uses: docker/build-push-action@v5
       with:
-        context: .
+        context: /tmp/build-frontend
         push: true
-        tags: ${{ env.FRONTEND_IMAGE }}
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache-new
-
-    - name: Move cache
-      run: |
-        rm -rf /tmp/.buildx-cache
-        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+        tags: ${{ env.FRONTEND_IMAGE }}:latest
+        build-args: |
+          NODE_ENV=production
+        cache-from: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache
+        cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
 
   backend-build:
     runs-on: ubuntu-latest
@@ -423,6 +415,10 @@ jobs:
       run: |
         rm -rf *
         rm -rf .git
+        
+    - name: Create temp directory for build
+      run: mkdir -p /tmp/build-backend
+
     - name: Checkout Backend Code
       uses: actions/checkout@v4
       with:
@@ -430,41 +426,29 @@ jobs:
         token: ${{ secrets.GH_PAT }}
         clean: true
         force: true
+        path: /tmp/build-backend
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: "18"
         cache: 'npm'
-        cache-dependency-path: '**/package-lock.json'
-
-    - name: Get npm cache directoryid
-      id: npm-cache-dir
-      shell: bash
-      run: echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+        cache-dependency-path: '/tmp/build-backend/package-lock.json'
 
     - name: Cache npm dependencies
       uses: actions/cache@v3
       id: npm-cache
       with:
-        path: ${{ steps.npm-cache-dir.outputs.dir }}
-        key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+        path: ~/.npm
+        key: ${{ runner.os }}-npm-${{ hashFiles('/tmp/build-backend/package-lock.json') }}
         restore-keys: |
           ${{ runner.os }}-npm-
 
     - name: Install Backend Dependencies
-      if: steps.npm-cache.outputs.cache-hit != 'true'
+      working-directory: /tmp/build-backend
       run: |
         npm install
         npm cache verify
-
-    - name: Cache Docker layers
-      uses: actions/cache@v3
-      with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx-backend-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-backend-
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -478,17 +462,13 @@ jobs:
     - name: Build and Push Backend Image
       uses: docker/build-push-action@v5
       with:
-        context: .
+        context: /tmp/build-backend
         push: true
-        tags: ${{ env.BACKEND_IMAGE }}
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache-new
-
-    - name: Move cache
-      run: |
-        rm -rf /tmp/.buildx-cache
-        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-
+        tags: ${{ env.BACKEND_IMAGE }}:latest
+        build-args: |
+          NODE_ENV=production
+        cache-from: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache
+        cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max 
   deploy:
     needs: [frontend-build, backend-build]
     runs-on: ubuntu-latest
