@@ -1,1361 +1,685 @@
-// // require('dotenv').config();
-// // const express = require('express');
-// // const mongoose = require('mongoose');
-// // const cors = require('cors');
-// // const helmet = require('helmet');
-// // const rateLimit = require('express-rate-limit');
-// // const morgan = require('morgan');
-// // const compression = require('compression');
-// // const winston = require('winston');
-// // const { URL } = require('url');
 
-// // // Configuration
-// // const config = {
-// //   app: {
-// //     port: parseInt(process.env.PORT || '5000', 10),
-// //     nodeEnv: process.env.NODE_ENV || 'development',
-// //     buildVersion: process.env.BUILD_VERSION || 'development',
-// //   },
-// //   db: {
-// //     url: process.env.MONGO_URL || 'mongodb+srv://JAYACHANDRAN:KQJrxDn44181NsqT@cluster0.w45he.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
-// //     options: {
-// //       serverSelectionTimeoutMS: 10000,
-// //       connectTimeoutMS: 10000,
-// //       socketTimeoutMS: 45000,
-// //       retryWrites: true,
-// //       w: 'majority',
-// //     },
-// //   },
-// //   security: {
-// //     corsOrigins: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
-// //     allowedImageDomains: [
-// //       'imgur.com',
-// //       'i.imgur.com',
-// //       'upload.wikimedia.org',
-// //       'images.unsplash.com',
-// //       'cloudinary.com',
-// //     ],
-// //   },
-// // };
-
-// // // Logger Setup
-// // const logger = winston.createLogger({
-// //   level: 'info',
-// //   format: winston.format.combine(
-// //     winston.format.timestamp(),
-// //     winston.format.json()
-// //   ),
-// //   transports: [
-// //     new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-// //     new winston.transports.File({ filename: 'logs/combined.log' }),
-// //     new winston.transports.Console({
-// //       format: winston.format.combine(
-// //         winston.format.colorize(),
-// //         winston.format.simple()
-// //       ),
-// //     }),
-// //   ],
-// // });
-
-// // // Image URL Validator
-// // const isValidImageUrl = (urlString) => {
-// //   try {
-// //     const url = new URL(urlString);
-// //     const hostname = url.hostname;
-// //     return config.security.allowedImageDomains.some(domain => 
-// //       hostname === domain || hostname.endsWith(`.${domain}`)
-// //     ) && url.protocol === 'https:' && /\.(jpg|jpeg|png|gif|webp)$/i.test(url.pathname);
-// //   } catch {
-// //     return false;
-// //   }
-// // };
-
-// // // Movie Schema
-// // const movieSchema = new mongoose.Schema({
-// //   title: {
-// //     type: String,
-// //     required: true,
-// //     trim: true,
-// //   },
-// //   releaseYear: {
-// //     type: Number,
-// //     required: true,
-// //     min: 1888,
-// //     max: new Date().getFullYear() + 5,
-// //   },
-// //   genre: [{
-// //     type: String,
-// //     required: true,
-// //     enum: ['Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Thriller', 'Romance'],
-// //   }],
-// //   director: {
-// //     type: String,
-// //     required: true,
-// //   },
-// //   poster: {
-// //     type: String,
-// //     validate: {
-// //       validator: isValidImageUrl,
-// //       message: 'Invalid image URL',
-// //     },
-// //   },
-// //   rating: {
-// //     type: Number,
-// //     min: 0,
-// //     max: 10,
-// //     default: 0,
-// //   },
-// // }, {
-// //   timestamps: true,
-// // });
-
-// // movieSchema.index({ title: 1, releaseYear: 1 }, { unique: true });
-// // const Movie = mongoose.model('Movie', movieSchema);
-
-// // // Express App Setup
-// // const app = express();
-// // let isShuttingDown = false;
-// // let isDbConnected = false;
-
-// // // Security Middleware
-// // const limiter = rateLimit({
-// //   windowMs: 15 * 60 * 1000,
-// //   max: 100,
-// //   message: { error: 'Too many requests, please try again later.' },
-// //   standardHeaders: true,
-// //   legacyHeaders: false,
-// // });
-
-// // app.use(helmet({
-// //   contentSecurityPolicy: {
-// //     directives: {
-// //       defaultSrc: ["'self'"],
-// //       connectSrc: ["'self'", ...config.security.corsOrigins],
-// //       imgSrc: ["'self'", 'https:', 'data:', ...config.security.allowedImageDomains.map(domain => `https://*.${domain}`)],
-// //     },
-// //   },
-// // }));
-
-// // app.use(compression());
-// // app.use(morgan('combined'));
-// // app.use(limiter);
-// // app.use(cors({
-// //   origin: config.security.corsOrigins,
-// //   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-// //   allowedHeaders: ['Content-Type', 'Authorization'],
-// //   credentials: true,
-// //   maxAge: 86400,
-// // }));
-
-// // app.use(express.json({ limit: '10mb' }));
-// // app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// // // No-cache middleware
-// // app.use((req, res, next) => {
-// //   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-// //   res.setHeader('Pragma', 'no-cache');
-// //   res.setHeader('Expires', '0');
-// //   next();
-// // });
-
-// // // Request logging
-// // app.use((req, res, next) => {
-// //   if (!isShuttingDown) {
-// //     logger.info(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-// //     next();
-// //   } else {
-// //     res.status(503).json({
-// //       error: 'Service is shutting down',
-// //       retryAfter: 30,
-// //     });
-// //   }
-// // });
-
-// // // Health Check Routes - Updated to match K8s probe paths
-// // app.get('/api/health/live', (req, res) => {
-// //   res.status(200).json({ 
-// //     status: 'OK', 
-// //     timestamp: new Date().toISOString() 
-// //   });
-// // });
-
-// // app.get('/api/health/ready', (req, res) => {
-// //   if (isDbConnected) {
-// //     res.status(200).json({ 
-// //       status: 'OK', 
-// //       timestamp: new Date().toISOString() 
-// //     });
-// //   } else {
-// //     res.status(503).json({ 
-// //       status: 'Service Unavailable', 
-// //       timestamp: new Date().toISOString() 
-// //     });
-// //   }
-// // });
-
-// // // Add legacy paths for backward compatibility
-// // app.get('/health/live', (req, res) => {
-// //   res.status(200).json({ 
-// //     status: 'OK', 
-// //     timestamp: new Date().toISOString() 
-// //   });
-// // });
-
-// // app.get('/health/ready', (req, res) => {
-// //   if (isDbConnected) {
-// //     res.status(200).json({ 
-// //       status: 'OK', 
-// //       timestamp: new Date().toISOString() 
-// //     });
-// //   } else {
-// //     res.status(503).json({ 
-// //       status: 'Service Unavailable', 
-// //       timestamp: new Date().toISOString() 
-// //     });
-// //   }
-// // });
-
-// // // Movie Routes
-// // app.get('/api/movies', async (req, res, next) => {
-// //   try {
-// //     const { page = 1, limit = 10, genre, year, sort } = req.query;
-    
-// //     const query = {};
-// //     if (genre) query.genre = genre;
-// //     if (year) query.releaseYear = year;
-    
-// //     const sortOptions = {};
-// //     if (sort) {
-// //       const [field, order] = sort.split(':');
-// //       sortOptions[field] = order === 'desc' ? -1 : 1;
-// //     }
-
-// //     const movies = await Movie.find(query)
-// //       .sort(sortOptions)
-// //       .limit(parseInt(limit))
-// //       .skip((parseInt(page) - 1) * parseInt(limit));
-      
-// //     const total = await Movie.countDocuments(query);
-
-// //     res.json({
-// //       movies,
-// //       totalPages: Math.ceil(total / limit),
-// //       currentPage: parseInt(page),
-// //       totalMovies: total,
-// //     });
-// //   } catch (err) {
-// //     next(err);
-// //   }
-// // });
-
-// // app.get('/api/movies/:id', async (req, res, next) => {
-// //   try {
-// //     const movie = await Movie.findById(req.params.id);
-// //     if (!movie) {
-// //       return res.status(404).json({ error: 'Movie not found' });
-// //     }
-// //     res.json(movie);
-// //   } catch (err) {
-// //     next(err);
-// //   }
-// // });
-
-// // app.post('/api/movies', async (req, res, next) => {
-// //   try {
-// //     const movie = new Movie(req.body);
-// //     await movie.save();
-// //     logger.info(`New movie created: ${movie.title}`);
-// //     res.status(201).json(movie);
-// //   } catch (err) {
-// //     next(err);
-// //   }
-// // });
-
-// // app.put('/api/movies/:id', async (req, res, next) => {
-// //   try {
-// //     const movie = await Movie.findByIdAndUpdate(
-// //       req.params.id,
-// //       req.body,
-// //       { new: true, runValidators: true }
-// //     );
-// //     if (!movie) {
-// //       return res.status(404).json({ error: 'Movie not found' });
-// //     }
-// //     logger.info(`Movie updated: ${movie.title}`);
-// //     res.json(movie);
-// //   } catch (err) {
-// //     next(err);
-// //   }
-// // });
-
-// // app.delete('/api/movies/:id', async (req, res, next) => {
-// //   try {
-// //     const movie = await Movie.findByIdAndDelete(req.params.id);
-// //     if (!movie) {
-// //       return res.status(404).json({ error: 'Movie not found' });
-// //     }
-// //     logger.info(`Movie deleted: ${movie.title}`);
-// //     res.status(204).send();
-// //   } catch (err) {
-// //     next(err);
-// //   }
-// // });
-
-// // // Error Handler
-// // app.use((err, req, res, next) => {
-// //   logger.error('Error:', {
-// //     error: err,
-// //     request: {
-// //       method: req.method,
-// //       path: req.path,
-// //       headers: req.headers,
-// //       body: req.body,
-// //     },
-// //   });
-
-// //   const statusCode = err.status || 500;
-// //   const errorResponse = {
-// //     error: err.name || 'Internal Server Error',
-// //     message: config.app.nodeEnv === 'development' ? err.message : 'An error occurred',
-// //     status: statusCode,
-// //     timestamp: new Date().toISOString(),
-// //     path: req.path,
-// //     version: config.app.buildVersion,
-// //   };
-
-// //   if (config.app.nodeEnv === 'development' && err.stack) {
-// //     errorResponse.stack = err.stack;
-// //   }
-
-// //   res.status(statusCode).json(errorResponse);
-// // });
-
-// // // Database Connection
-// // const connectDB = async (retries = 5, delay = 5000) => {
-// //   while (retries > 0 && !isShuttingDown) {
-// //     try {
-// //       logger.info(`Connecting to MongoDB... (${retries} attempts remaining)`);
-// //       await mongoose.connect(config.db.url, config.db.options);
-// //       logger.info('✅ MongoDB connected successfully');
-// //       isDbConnected = true;
-// //       return true;
-// //     } catch (err) {
-// //       logger.error('❌ MongoDB connection error:', err);
-// //       retries--;
-// //       if (retries === 0) {
-// //         logger.error('❌ Max retries reached');
-// //         return false;
-// //       }
-// //       await new Promise(resolve => setTimeout(resolve, delay));
-// //     }
-// //   }
-// //   return false;
-// // };
-
-// // // Server Startup
-// // const startServer = async () => {
-// //   try {
-// //     const isConnected = await connectDB();
-
-// //     if (!isConnected) {
-// //       logger.error('Failed to connect to MongoDB. Exiting...');
-// //       process.exit(1);
-// //     }
-
-// //     const server = app.listen(config.app.port, '0.0.0.0', () => {
-// //       logger.info(`
-// // 🚀 Server is running on port ${config.app.port}
-// // 📦 Version: ${config.app.buildVersion}
-// // 🔧 Environment: ${config.app.nodeEnv}
-// // 🌐 CORS Origins: ${config.security.corsOrigins.join(', ')}
-// // 🏥 Liveness: http://localhost:${config.app.port}/api/health/live
-// // 🔍 Readiness: http://localhost:${config.app.port}/api/health/ready
-// //       `);
-// //     });
-
-// //     // Graceful shutdown
-// //     process.on('SIGINT', () => {
-// //       isShuttingDown = true;
-// //       logger.info('Shutting down server...');
-// //       server.close(() => {
-// //         mongoose.connection.close(false, () => {
-// //           logger.info('MongoDB connection closed.');
-// //           process.exit(0);
-// //         });
-// //       });
-// //     });
-
-// //     // Server error handler
-// //     server.on('error', (err) => {
-// //       logger.error('Server error:', err);
-// //       process.exit(1);
-// //     });
-
-// //     // Periodic health checks
-// //     setInterval(() => {
-// //       if (!isShuttingDown && !isDbConnected) {
-// //         logger.warn('Database connection check failed, attempting reconnect...');
-// //         connectDB(3).catch(err => logger.error('Reconnection failed:', err));
-// //       }
-// //     }, 5000);
-// //   } catch (err) {
-// //     logger.error('Failed to start server:', err);
-// //     process.exit(1);
-// //   }
-// // };
-
-// // startServer();
-
-// // module.exports = app;
 // require('dotenv').config();
-// const express = require('express');
-// const mongoose = require('mongoose');
-// const cors = require('cors');
-// const helmet = require('helmet');
-// const rateLimit = require('express-rate-limit');
-// const morgan = require('morgan');
-// const compression = require('compression');
-// const winston = require('winston');
-// const { URL } = require('url');
+// const express = require("express");
+// const mongoose = require("mongoose");
+// const cors = require("cors");
 
-// // Configuration
-// const config = {
-//   app: {
-//     port: parseInt(process.env.PORT || '5000', 10),
-//     nodeEnv: process.env.NODE_ENV || 'development',
-//     buildVersion: process.env.BUILD_VERSION || 'development',
-//   },
-//   db: {
-//     url: process.env.MONGO_URL || 'mongodb+srv://JAYACHANDRAN:KQJrxDn44181NsqT@cluster0.w45he.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
-//     options: {
-//       serverSelectionTimeoutMS: 10000,
-//       connectTimeoutMS: 10000,
-//       socketTimeoutMS: 45000,
-//       retryWrites: true,
-//       w: 'majority',
-//     },
-//   },
-//   security: {
-//     corsOrigins: process.env.CORS_ORIGINS || '*',
-//     allowedImageDomains: [
-//       'imgur.com',
-//       'i.imgur.com',
-//       'upload.wikimedia.org',
-//       'images.unsplash.com',
-//       'cloudinary.com',
-//     ],
-//   },
-// };
+// const movieRouter = require("./routes/movie");
+// const actorRouter = require("./routes/actor");
+// const producerRouter = require("./routes/producer");
 
-// // Logger Setup
-// const logger = winston.createLogger({
-//   level: process.env.LOG_LEVEL || 'info',
-//   format: winston.format.combine(
-//     winston.format.timestamp(),
-//     winston.format.json()
-//   ),
-//   transports: [
-//     new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-//     new winston.transports.File({ filename: 'logs/combined.log' }),
-//     new winston.transports.Console({
-//       format: winston.format.combine(
-//         winston.format.colorize(),
-//         winston.format.simple()
-//       ),
-//     }),
-//   ],
-// });
-
-// // Image URL Validator
-// const isValidImageUrl = (urlString) => {
-//   try {
-//     const url = new URL(urlString);
-//     const hostname = url.hostname;
-//     return config.security.allowedImageDomains.some(domain => 
-//       hostname === domain || hostname.endsWith(`.${domain}`)
-//     ) && url.protocol === 'https:' && /\.(jpg|jpeg|png|gif|webp)$/i.test(url.pathname);
-//   } catch {
-//     return false;
-//   }
-// };
-
-// // Movie Schema
-// const movieSchema = new mongoose.Schema({
-//   title: {
-//     type: String,
-//     required: true,
-//     trim: true,
-//   },
-//   releaseYear: {
-//     type: Number,
-//     required: true,
-//     min: 1888,
-//     max: new Date().getFullYear() + 5,
-//   },
-//   genre: [{
-//     type: String,
-//     required: true,
-//     enum: ['Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Thriller', 'Romance'],
-//   }],
-//   director: {
-//     type: String,
-//     required: true,
-//   },
-//   poster: {
-//     type: String,
-//     validate: {
-//       validator: isValidImageUrl,
-//       message: 'Invalid image URL',
-//     },
-//   },
-//   rating: {
-//     type: Number,
-//     min: 0,
-//     max: 10,
-//     default: 0,
-//   },
-// }, {
-//   timestamps: true,
-// });
-
-// movieSchema.index({ title: 1, releaseYear: 1 }, { unique: true });
-// const Movie = mongoose.model('Movie', movieSchema);
-
-// // Express App Setup
 // const app = express();
-// let isShuttingDown = false;
-// let isDbConnected = false;
+// const buildVersion = process.env.BUILD_VERSION || 'development';
+// const PORT = process.env.PORT || 5000;
 
-// // Security Middleware
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000,
-//   max: 100,
-//   message: { error: 'Too many requests, please try again later.' },
-//   standardHeaders: true,
-//   legacyHeaders: false,
-// });
+// // MongoDB Atlas configuration
+// const MONGO_URL = "mongodb+srv://JAYACHANDRAN:KQJrxDn44181NsqT@cluster0.w45he.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
-// // Configure CORS
-// const corsOptions = {
-//   origin: config.security.corsOrigins === '*' 
-//     ? '*' 
-//     : config.security.corsOrigins.split(','),
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization'],
-//   credentials: true,
-//   maxAge: 86400,
-// };
-
-// app.use(cors(corsOptions));
-
-// // Set up helmet with more permissive CSP
-// app.use(helmet({
-//   contentSecurityPolicy: {
-//     directives: {
-//       defaultSrc: ["'self'"],
-//       connectSrc: ["'self'", '*'],
-//       imgSrc: ["'self'", 'https:', 'data:', '*'],
-//     },
-//   },
+// // Initialize middleware
+// app.use(cors({
+//     origin: '*',
+//     methods: ['GET', 'POST', 'PUT', 'DELETE'],
+//     credentials: true
 // }));
+// app.use(express.json());
+// app.use(express.urlencoded({ extended: true }));
 
-// app.use(compression());
-// app.use(morgan('combined'));
-// app.use(limiter);
-// app.use(express.json({ limit: '10mb' }));
-// app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// // No-cache middleware
+// // Basic request logging middleware
 // app.use((req, res, next) => {
-//   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-//   res.setHeader('Pragma', 'no-cache');
-//   res.setHeader('Expires', '0');
-//   next();
-// });
-
-// // Request logging
-// app.use((req, res, next) => {
-//   if (!isShuttingDown) {
-//     logger.info(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+//     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
 //     next();
-//   } else {
-//     res.status(503).json({
-//       error: 'Service is shutting down',
-//       retryAfter: 30,
-//     });
-//   }
 // });
 
-// // Health Check Routes - IMPORTANT! These must match Kubernetes probe paths
-// // Primary health endpoints (matching Kubernetes probe paths)
-// app.get('/health/live', (req, res) => {
-//   res.status(200).json({ 
-//     status: 'OK', 
-//     timestamp: new Date().toISOString() 
-//   });
-// });
-
-// app.get('/health/ready', (req, res) => {
-//   if (isDbConnected) {
-//     res.status(200).json({ 
-//       status: 'OK', 
-//       timestamp: new Date().toISOString() 
-//     });
-//   } else {
-//     res.status(503).json({ 
-//       status: 'Service Unavailable', 
-//       timestamp: new Date().toISOString() 
-//     });
-//   }
-// });
-
-// // Secondary API-prefixed endpoints for compatibility
-// app.get('/api/health/live', (req, res) => {
-//   res.status(200).json({ 
-//     status: 'OK', 
-//     timestamp: new Date().toISOString() 
-//   });
-// });
-
-// app.get('/api/health/ready', (req, res) => {
-//   if (isDbConnected) {
-//     res.status(200).json({ 
-//       status: 'OK', 
-//       timestamp: new Date().toISOString() 
-//     });
-//   } else {
-//     res.status(503).json({ 
-//       status: 'Service Unavailable', 
-//       timestamp: new Date().toISOString() 
-//     });
-//   }
-// });
-
-// // Movie Routes
-// app.get('/api/movies', async (req, res, next) => {
-//   try {
-//     const { page = 1, limit = 10, genre, year, sort } = req.query;
-    
-//     const query = {};
-//     if (genre) query.genre = genre;
-//     if (year) query.releaseYear = year;
-    
-//     const sortOptions = {};
-//     if (sort) {
-//       const [field, order] = sort.split(':');
-//       sortOptions[field] = order === 'desc' ? -1 : 1;
-//     }
-
-//     const movies = await Movie.find(query)
-//       .sort(sortOptions)
-//       .limit(parseInt(limit))
-//       .skip((parseInt(page) - 1) * parseInt(limit));
-      
-//     const total = await Movie.countDocuments(query);
-
-//     res.json({
-//       movies,
-//       totalPages: Math.ceil(total / limit),
-//       currentPage: parseInt(page),
-//       totalMovies: total,
-//     });
-//   } catch (err) {
-//     next(err);
-//   }
-// });
-
-// app.get('/api/movies/:id', async (req, res, next) => {
-//   try {
-//     const movie = await Movie.findById(req.params.id);
-//     if (!movie) {
-//       return res.status(404).json({ error: 'Movie not found' });
-//     }
-//     res.json(movie);
-//   } catch (err) {
-//     next(err);
-//   }
-// });
-
-// app.post('/api/movies', async (req, res, next) => {
-//   try {
-//     const movie = new Movie(req.body);
-//     await movie.save();
-//     logger.info(`New movie created: ${movie.title}`);
-//     res.status(201).json(movie);
-//   } catch (err) {
-//     next(err);
-//   }
-// });
-
-// app.put('/api/movies/:id', async (req, res, next) => {
-//   try {
-//     const movie = await Movie.findByIdAndUpdate(
-//       req.params.id,
-//       req.body,
-//       { new: true, runValidators: true }
-//     );
-//     if (!movie) {
-//       return res.status(404).json({ error: 'Movie not found' });
-//     }
-//     logger.info(`Movie updated: ${movie.title}`);
-//     res.json(movie);
-//   } catch (err) {
-//     next(err);
-//   }
-// });
-
-// app.delete('/api/movies/:id', async (req, res, next) => {
-//   try {
-//     const movie = await Movie.findByIdAndDelete(req.params.id);
-//     if (!movie) {
-//       return res.status(404).json({ error: 'Movie not found' });
-//     }
-//     logger.info(`Movie deleted: ${movie.title}`);
-//     res.status(204).send();
-//   } catch (err) {
-//     next(err);
-//   }
-// });
-
-// // Add a root path endpoint for API testing
+// // Root endpoint
 // app.get('/', (req, res) => {
-//   res.json({
-//     message: "IMDB Clone API is running",
-//     version: config.app.buildVersion,
-//     environment: config.app.nodeEnv,
-//     timestamp: new Date().toISOString()
-//   });
+//     res.status(200).json({ 
+//         message: 'IMDB API Server Running',
+//         version: buildVersion,
+//         timestamp: new Date().toISOString()
+//     });
 // });
 
-// // Error Handler
+// // Health check endpoint
+// app.get('/api/health', (req, res) => {
+//     const isDbConnected = mongoose.connection.readyState === 1;
+    
+//     res.status(isDbConnected ? 200 : 503).json({ 
+//         status: isDbConnected ? 'healthy' : 'unhealthy',
+//         version: buildVersion,
+//         timestamp: new Date().toISOString(),
+//         database: {
+//             connected: isDbConnected,
+//             state: ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoose.connection.readyState]
+//         }
+//     });
+// });
+
+// // API Routes
+// app.use("/api/movies", movieRouter);
+// app.use("/api/actors", actorRouter);
+// app.use("/api/producers", producerRouter);
+
+// // MongoDB Connection Configuration
+// const connectDB = async (retries = 5) => {
+//     console.log("Starting IMDB API Server - Version:", buildVersion);
+    
+//     while (retries) {
+//         try {
+//             console.log("Attempting to connect to MongoDB Atlas...");
+            
+//             await mongoose.connect(MONGO_URL, {
+//                 retryWrites: true,
+//                 w: 'majority',
+//                 serverSelectionTimeoutMS: 5000,
+//                 connectTimeoutMS: 10000,
+//                 socketTimeoutMS: 45000
+//             });
+            
+//             console.log("✅ MongoDB Atlas connected successfully");
+//             return true;
+//         } catch (err) {
+//             console.error("❌ MongoDB connection error:", err.message);
+//             retries -= 1;
+            
+//             if (retries === 0) {
+//                 console.error("❌ Max retries reached. Exiting...");
+//                 process.exit(1);
+//             }
+            
+//             console.log(`⏳ Retrying connection... (${retries} attempts remaining)`);
+//             await new Promise(resolve => setTimeout(resolve, 5000));
+//         }
+//     }
+//     return false;
+// };
+
+// // Mongoose event handlers
+// mongoose.connection.on('error', (err) => {
+//     console.error('MongoDB connection error:', err);
+// });
+
+// mongoose.connection.on('disconnected', () => {
+//     console.log('MongoDB disconnected');
+// });
+
+// mongoose.connection.on('reconnected', () => {
+//     console.log('MongoDB reconnected');
+// });
+
+// // Error handling middleware
 // app.use((err, req, res, next) => {
-//   logger.error('Error:', {
-//     error: err,
-//     request: {
-//       method: req.method,
-//       path: req.path,
-//       headers: req.headers,
-//       body: req.body,
-//     },
-//   });
-
-//   const statusCode = err.status || 500;
-//   const errorResponse = {
-//     error: err.name || 'Internal Server Error',
-//     message: config.app.nodeEnv === 'development' ? err.message : 'An error occurred',
-//     status: statusCode,
-//     timestamp: new Date().toISOString(),
-//     path: req.path,
-//     version: config.app.buildVersion,
-//   };
-
-//   if (config.app.nodeEnv === 'development' && err.stack) {
-//     errorResponse.stack = err.stack;
-//   }
-
-//   res.status(statusCode).json(errorResponse);
+//     console.error('❌ Error:', err.stack);
+//     res.status(err.status || 500).json({
+//         error: err.name || 'Internal Server Error',
+//         message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',
+//         version: buildVersion
+//     });
 // });
 
-// // Database Connection
-// const connectDB = async (retries = 5, delay = 5000) => {
-//   while (retries > 0 && !isShuttingDown) {
+// // 404 handler
+// app.use((req, res) => {
+//     res.status(404).json({
+//         error: 'Route not found',
+//         path: req.path,
+//         method: req.method,
+//         version: buildVersion
+//     });
+// });
+
+// // Graceful shutdown handler
+// const gracefulShutdown = async () => {
 //     try {
-//       logger.info(`Connecting to MongoDB... (${retries} attempts remaining)`);
-//       await mongoose.connect(config.db.url, config.db.options);
-//       logger.info('✅ MongoDB connected successfully');
-//       isDbConnected = true;
-//       return true;
+//         console.log('🔄 Initiating graceful shutdown...');
+        
+//         if (mongoose.connection.readyState === 1) {
+//             await mongoose.connection.close();
+//             console.log('📝 MongoDB connection closed');
+//         }
+        
+//         process.exit(0);
 //     } catch (err) {
-//       logger.error('❌ MongoDB connection error:', err);
-//       retries--;
-//       if (retries === 0) {
-//         logger.error('❌ Max retries reached');
-//         return false;
-//       }
-//       await new Promise(resolve => setTimeout(resolve, delay));
+//         console.error('❌ Error during graceful shutdown:', err);
+//         process.exit(1);
 //     }
-//   }
-//   return false;
 // };
 
-// // Server Startup
+// // Server initialization
 // const startServer = async () => {
-//   try {
-//     const isConnected = await connectDB();
-
-//     if (!isConnected) {
-//       logger.error('Failed to connect to MongoDB. Exiting...');
-//       process.exit(1);
-//     }
-
-//     const server = app.listen(config.app.port, '0.0.0.0', () => {
-//       logger.info(`
-// 🚀 Server is running on port ${config.app.port}
-// 📦 Version: ${config.app.buildVersion}
-// 🔧 Environment: ${config.app.nodeEnv}
-// 🌐 CORS Origins: ${config.security.corsOrigins}
-// 🏥 Liveness: http://localhost:${config.app.port}/health/live
-// 🔍 Readiness: http://localhost:${config.app.port}/health/ready
-//       `);
-//     });
-
-//     // Graceful shutdown
-//     process.on('SIGINT', () => {
-//       isShuttingDown = true;
-//       logger.info('Shutting down server...');
-//       server.close(() => {
-//         mongoose.connection.close(false, () => {
-//           logger.info('MongoDB connection closed.');
-//           process.exit(0);
+//     try {
+//         const isConnected = await connectDB();
+        
+//         if (!isConnected) {
+//             console.error("❌ Failed to connect to MongoDB. Server will not start.");
+//             process.exit(1);
+//         }
+        
+//         const server = app.listen(PORT, '0.0.0.0', () => {
+//             console.log(`🚀 Server is running on port ${PORT}`);
+//             console.log(`📦 Version: ${buildVersion}`);
+//             console.log(`🏥 Health check: http://localhost:${PORT}/api/health`);
 //         });
-//       });
-//     });
 
-//     // Server error handler
-//     server.on('error', (err) => {
-//       logger.error('Server error:', err);
-//       process.exit(1);
-//     });
+//         server.on('error', (err) => {
+//             console.error('Server error:', err);
+//             process.exit(1);
+//         });
 
-//     // Periodic health checks
-//     setInterval(() => {
-//       if (!isShuttingDown && !isDbConnected) {
-//         logger.warn('Database connection check failed, attempting reconnect...');
-//         connectDB(3).catch(err => logger.error('Reconnection failed:', err));
-//       }
-//     }, 5000);
-//   } catch (err) {
-//     logger.error('Failed to start server:', err);
-//     process.exit(1);
-//   }
+//     } catch (err) {
+//         console.error('❌ Failed to start server:', err);
+//         process.exit(1);
+//     }
 // };
 
+// // Global error handlers
+// process.on('uncaughtException', (err) => {
+//     console.error('❌ Uncaught Exception:', err);
+//     process.exit(1);
+// });
+
+// process.on('unhandledRejection', (err) => {
+//     console.error('❌ Unhandled Rejection:', err);
+//     process.exit(1);
+// });
+
+// // Shutdown signals
+// process.on('SIGTERM', gracefulShutdown);
+// process.on('SIGINT', gracefulShutdown);
+
+// // Start the server
 // startServer();
 
 // module.exports = app;
-require('dotenv').config();
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
+// // const express = require("express");
+// // const mongoose = require("mongoose");
+// // const cors = require("cors");
+// // const helmet = require('helmet');
+// // const rateLimit = require('express-rate-limit');
+
+// // // Import routes
+// // const movieRouter = require("./routes/movie");
+// // const actorRouter = require("./routes/actor");
+// // const producerRouter = require("./routes/producer");
+
+// // // Initialize express
+// // const app = express();
+
+// // // Configuration
+// // const config = {
+// //     port: parseInt(process.env.PORT || '5000', 10),
+// //     mongoUrl: process.env.MONGO_URL,
+// //     nodeEnv: process.env.NODE_ENV || 'development',
+// //     buildVersion: process.env.BUILD_VERSION || 'development',
+// //     corsOrigins: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : ['*'],
+// //     connectionTimeout: parseInt(process.env.CONNECTION_TIMEOUT || '10000', 10),
+// //     readyStateCheckInterval: parseInt(process.env.READY_STATE_CHECK_INTERVAL || '5000', 10)
+// // };
+
+// // // Server state
+// // let isShuttingDown = false;
+// // let isDbConnected = false;
+
+// // // Rate limiting
+// // const limiter = rateLimit({
+// //     windowMs: 15 * 60 * 1000, // 15 minutes
+// //     max: 100 // limit each IP to 100 requests per windowMs
+// // });
+
+// // // Middleware
+// // app.use(helmet());
+// // app.use(limiter);
+// // app.use(cors({
+// //     origin: config.corsOrigins,
+// //     methods: ['GET', 'POST', 'PUT', 'DELETE'],
+// //     credentials: true
+// // }));
+// // app.use(express.json());
+// // app.use(express.urlencoded({ extended: true }));
+
+// // // Request logging middleware
+// // app.use((req, res, next) => {
+// //     if (!isShuttingDown) {
+// //         console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+// //         next();
+// //     } else {
+// //         res.status(503).json({ error: 'Service is shutting down' });
+// //     }
+// // });
+
+// // // Liveness probe endpoint
+// // app.get('/api/health/live', (req, res) => {
+// //     res.status(200).json({
+// //         status: 'alive',
+// //         timestamp: new Date().toISOString(),
+// //         version: config.buildVersion
+// //     });
+// // });
+
+// // // Readiness probe endpoint
+// // app.get('/api/health/ready', (req, res) => {
+// //     if (isShuttingDown) {
+// //         return res.status(503).json({
+// //             status: 'shutting_down',
+// //             timestamp: new Date().toISOString()
+// //         });
+// //     }
+
+// //     const isReady = mongoose.connection.readyState === 1 && isDbConnected;
+    
+// //     res.status(isReady ? 200 : 503).json({
+// //         status: isReady ? 'ready' : 'not_ready',
+// //         version: config.buildVersion,
+// //         timestamp: new Date().toISOString(),
+// //         database: {
+// //             connected: isDbConnected,
+// //             state: ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoose.connection.readyState]
+// //         }
+// //     });
+// // });
+
+// // // API Routes
+// // app.use("/api/movies", movieRouter);
+// // app.use("/api/actors", actorRouter);
+// // app.use("/api/producers", producerRouter);
+
+// // // MongoDB Connection
+// // const connectDB = async (retries = 5, delay = 5000) => {
+// //     while (retries > 0 && !isShuttingDown) {
+// //         try {
+// //             console.log(`Connecting to MongoDB... (${retries} attempts remaining)`);
+            
+// //             await mongoose.connect(config.mongoUrl, {
+// //                 serverSelectionTimeoutMS: config.connectionTimeout,
+// //                 connectTimeoutMS: config.connectionTimeout,
+// //                 socketTimeoutMS: 45000,
+// //                 retryWrites: true,
+// //                 w: 'majority'
+// //             });
+
+// //             console.log('✅ MongoDB connected successfully');
+// //             isDbConnected = true;
+// //             return true;
+// //         } catch (err) {
+// //             console.error('❌ MongoDB connection error:', err.message);
+// //             retries--;
+            
+// //             if (retries === 0) {
+// //                 console.error('❌ Max retries reached');
+// //                 return false;
+// //             }
+
+// //             await new Promise(resolve => setTimeout(resolve, delay));
+// //         }
+// //     }
+// //     return false;
+// // };
+
+// // // MongoDB Event Handlers
+// // mongoose.connection.on('error', (err) => {
+// //     console.error('MongoDB error:', err);
+// //     isDbConnected = false;
+// // });
+
+// // mongoose.connection.on('disconnected', () => {
+// //     console.log('MongoDB disconnected');
+// //     isDbConnected = false;
+    
+// //     if (!isShuttingDown) {
+// //         connectDB(3).catch(console.error);
+// //     }
+// // });
+
+// // mongoose.connection.on('connected', () => {
+// //     console.log('MongoDB connected');
+// //     isDbConnected = true;
+// // });
+
+// // // Error Handling
+// // app.use((err, req, res, next) => {
+// //     console.error('Error:', err);
+// //     res.status(err.status || 500).json({
+// //         error: err.name || 'Internal Server Error',
+// //         message: config.nodeEnv === 'development' ? err.message : 'An error occurred',
+// //         version: config.buildVersion
+// //     });
+// // });
+
+// // // 404 Handler
+// // app.use((req, res) => {
+// //     res.status(404).json({
+// //         error: 'Not Found',
+// //         path: req.path,
+// //         method: req.method,
+// //         version: config.buildVersion
+// //     });
+// // });
+
+// // // Graceful Shutdown
+// // const gracefulShutdown = async (signal) => {
+// //     try {
+// //         console.log(`\n${signal} received. Starting graceful shutdown...`);
+// //         isShuttingDown = true;
+
+// //         // Stop accepting new requests (handled by middleware)
+// //         console.log('Stopping new requests...');
+        
+// //         // Wait for existing requests to complete (you might want to add a timeout)
+// //         await new Promise(resolve => setTimeout(resolve, 10000));
+
+// //         // Close MongoDB connection
+// //         if (mongoose.connection.readyState === 1) {
+// //             console.log('Closing MongoDB connection...');
+// //             await mongoose.connection.close();
+// //             console.log('MongoDB connection closed');
+// //         }
+
+// //         console.log('Graceful shutdown completed');
+// //         process.exit(0);
+// //     } catch (err) {
+// //         console.error('Error during shutdown:', err);
+// //         process.exit(1);
+// //     }
+// // };
+
+// // // Start Server
+// // const startServer = async () => {
+// //     try {
+// //         const isConnected = await connectDB();
+        
+// //         if (!isConnected) {
+// //             console.error('Failed to connect to MongoDB. Exiting...');
+// //             process.exit(1);
+// //         }
+
+// //         const server = app.listen(config.port, '0.0.0.0', () => {
+// //             console.log(`
+// // 🚀 Server is running on port ${config.port}
+// // 📦 Version: ${config.buildVersion}
+// // 🔧 Environment: ${config.nodeEnv}
+// // 🏥 Liveness: http://localhost:${config.port}/api/health/live
+// // 🔍 Readiness: http://localhost:${config.port}/api/health/ready
+// //             `);
+// //         });
+
+// //         // Server error handler
+// //         server.on('error', (err) => {
+// //             console.error('Server error:', err);
+// //             process.exit(1);
+// //         });
+
+// //         // Periodic ready state check
+// //         setInterval(() => {
+// //             if (!isShuttingDown && !isDbConnected) {
+// //                 console.log('Database connection check failed, attempting reconnect...');
+// //                 connectDB(3).catch(console.error);
+// //             }
+// //         }, config.readyStateCheckInterval);
+
+// //     } catch (err) {
+// //         console.error('Failed to start server:', err);
+// //         process.exit(1);
+// //     }
+// // };
+
+// // // Process Event Handlers
+// // process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+// // process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+// // process.on('uncaughtException', (err) => {
+// //     console.error('Uncaught Exception:', err);
+// //     gracefulShutdown('uncaughtException');
+// // });
+// // process.on('unhandledRejection', (err) => {
+// //     console.error('Unhandled Rejection:', err);
+// //     gracefulShutdown('unhandledRejection');
+// // });
+
+// // // Start the server
+// // startServer();
+
+// // module.exports = app;
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const morgan = require('morgan');
-const compression = require('compression');
-const winston = require('winston');
-const { URL } = require('url');
 
-// Enhanced Configuration
+// Import routes
+const movieRouter = require("./routes/movie");
+const actorRouter = require("./routes/actor");
+const producerRouter = require("./routes/producer");
+
+// Initialize express
+const app = express();
+
+// Configuration
 const config = {
-  app: {
     port: parseInt(process.env.PORT || '5000', 10),
+    mongoUrl: process.env.MONGO_URL,
     nodeEnv: process.env.NODE_ENV || 'development',
     buildVersion: process.env.BUILD_VERSION || 'development',
-  },
-  db: {
-    url: process.env.MONGO_URL || 'mongodb+srv://JAYACHANDRAN:KQJrxDn44181NsqT@cluster0.w45he.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
-    options: {
-      serverSelectionTimeoutMS: 10000,
-      connectTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-      retryWrites: true,
-      w: 'majority',
-    },
-  },
-  security: {
-    corsOrigins: process.env.CORS_ORIGINS || '*',
-    allowedImageDomains: [
-      'imgur.com',
-      'i.imgur.com',
-      'upload.wikimedia.org',
-      'images.unsplash.com',
-      'cloudinary.com',
-    ],
-  },
+    corsOrigins: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : ['*'],
+    connectionTimeout: parseInt(process.env.CONNECTION_TIMEOUT || '10000', 10),
+    readyStateCheckInterval: parseInt(process.env.READY_STATE_CHECK_INTERVAL || '5000', 10)
 };
 
-// Enhanced Logger Setup
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'logs/combined.log' }),
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      ),
-    }),
-  ],
-});
-
-// Image URL Validator
-const isValidImageUrl = (urlString) => {
-  try {
-    const url = new URL(urlString);
-    const hostname = url.hostname;
-    return config.security.allowedImageDomains.some(domain => 
-      hostname === domain || hostname.endsWith(`.${domain}`)
-    ) && url.protocol === 'https:' && /\.(jpg|jpeg|png|gif|webp)$/i.test(url.pathname);
-  } catch {
-    return false;
-  }
-};
-
-// Movie Schema
-const movieSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  releaseYear: {
-    type: Number,
-    required: true,
-    min: 1888,
-    max: new Date().getFullYear() + 5,
-  },
-  genre: [{
-    type: String,
-    required: true,
-    enum: ['Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Thriller', 'Romance'],
-  }],
-  director: {
-    type: String,
-    required: true,
-  },
-  poster: {
-    type: String,
-    validate: {
-      validator: isValidImageUrl,
-      message: 'Invalid image URL',
-    },
-  },
-  rating: {
-    type: Number,
-    min: 0,
-    max: 10,
-    default: 0,
-  },
-}, {
-  timestamps: true,
-});
-
-// Add additional schemas
-// Actor Schema
-const actorSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  dateOfBirth: {
-    type: Date,
-  },
-  bio: {
-    type: String,
-    maxlength: 1000,
-  },
-  photo: {
-    type: String,
-    validate: {
-      validator: isValidImageUrl,
-      message: 'Invalid image URL',
-    },
-  },
-}, {
-  timestamps: true,
-});
-
-// Producer Schema
-const producerSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  company: {
-    type: String,
-  },
-  bio: {
-    type: String,
-    maxlength: 1000,
-  },
-  photo: {
-    type: String,
-    validate: {
-      validator: isValidImageUrl,
-      message: 'Invalid image URL',
-    },
-  },
-}, {
-  timestamps: true,
-});
-
-movieSchema.index({ title: 1, releaseYear: 1 }, { unique: true });
-const Movie = mongoose.model('Movie', movieSchema);
-const Actor = mongoose.model('Actor', actorSchema);
-const Producer = mongoose.model('Producer', producerSchema);
-
-// Express App Setup
-const app = express();
+// Server state
 let isShuttingDown = false;
 let isDbConnected = false;
 
-// Security Middleware
+// Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { error: 'Too many requests, please try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per windowMs
 });
 
-// Configure CORS for all environments
-app.use(cors({
-  origin: '*', // Allow all origins in development/testing
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  maxAge: 86400,
-}));
-
-// Set up helmet with more permissive CSP for development
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      connectSrc: ["'self'", '*'],
-      imgSrc: ["'self'", 'https:', 'data:', '*'],
-    },
-  },
-}));
-
-app.use(compression());
-app.use(morgan('combined'));
+// Middleware
+app.use(helmet());
 app.use(limiter);
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cors({
+    origin: config.corsOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// No-cache middleware
+// Request logging middleware
 app.use((req, res, next) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  next();
+    if (!isShuttingDown) {
+        console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+        next();
+    } else {
+        res.status(503).json({ error: 'Service is shutting down' });
+    }
 });
 
-// Request logging
-app.use((req, res, next) => {
-  if (!isShuttingDown) {
-    logger.info(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-    next();
-  } else {
-    res.status(503).json({
-      error: 'Service is shutting down',
-      retryAfter: 30,
-    });
-  }
-});
-
-// Health Check Routes
-app.get('/health/live', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString() 
-  });
-});
-
-app.get('/health/ready', (req, res) => {
-  if (isDbConnected) {
-    res.status(200).json({ 
-      status: 'OK', 
-      timestamp: new Date().toISOString(),
-      database: 'connected'
-    });
-  } else {
-    res.status(503).json({ 
-      status: 'Service Unavailable', 
-      timestamp: new Date().toISOString(),
-      database: 'disconnected'
-    });
-  }
-});
-
-// Secondary API-prefixed endpoints
+// Liveness probe endpoint
 app.get('/api/health/live', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString() 
-  });
+    res.status(200).json({
+        status: 'alive',
+        timestamp: new Date().toISOString(),
+        version: config.buildVersion
+    });
 });
 
+// Readiness probe endpoint
 app.get('/api/health/ready', (req, res) => {
-  if (isDbConnected) {
-    res.status(200).json({ 
-      status: 'OK', 
-      timestamp: new Date().toISOString(),
-      database: 'connected' 
-    });
-  } else {
-    res.status(503).json({ 
-      status: 'Service Unavailable', 
-      timestamp: new Date().toISOString(),
-      database: 'disconnected'
-    });
-  }
-});
-
-// Root path endpoint - important
-app.get('/', (req, res) => {
-  res.json({
-    message: "IMDB Clone API is running",
-    version: config.app.buildVersion,
-    environment: config.app.nodeEnv,
-    timestamp: new Date().toISOString(),
-    endpoints: {
-      movies: "/api/movies",
-      actors: "/api/actors",
-      producers: "/api/producers",
-      health: "/health/live and /health/ready"
-    }
-  });
-});
-
-// Movie Routes
-app.get('/api/movies', async (req, res, next) => {
-  try {
-    const { page = 1, limit = 10, genre, year, sort } = req.query;
-    
-    const query = {};
-    if (genre) query.genre = genre;
-    if (year) query.releaseYear = year;
-    
-    const sortOptions = {};
-    if (sort) {
-      const [field, order] = sort.split(':');
-      sortOptions[field] = order === 'desc' ? -1 : 1;
-    }
-
-    const movies = await Movie.find(query)
-      .sort(sortOptions)
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit));
-      
-    const total = await Movie.countDocuments(query);
-
-    res.json({
-      movies,
-      totalPages: Math.ceil(total / limit),
-      currentPage: parseInt(page),
-      totalMovies: total,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.get('/api/movies/:id', async (req, res, next) => {
-  try {
-    const movie = await Movie.findById(req.params.id);
-    if (!movie) {
-      return res.status(404).json({ error: 'Movie not found' });
-    }
-    res.json(movie);
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.post('/api/movies', async (req, res, next) => {
-  try {
-    const movie = new Movie(req.body);
-    await movie.save();
-    logger.info(`New movie created: ${movie.title}`);
-    res.status(201).json(movie);
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.put('/api/movies/:id', async (req, res, next) => {
-  try {
-    const movie = await Movie.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-    if (!movie) {
-      return res.status(404).json({ error: 'Movie not found' });
-    }
-    logger.info(`Movie updated: ${movie.title}`);
-    res.json(movie);
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.delete('/api/movies/:id', async (req, res, next) => {
-  try {
-    const movie = await Movie.findByIdAndDelete(req.params.id);
-    if (!movie) {
-      return res.status(404).json({ error: 'Movie not found' });
-    }
-    logger.info(`Movie deleted: ${movie.title}`);
-    res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Actor Routes
-app.get('/api/actors', async (req, res, next) => {
-  try {
-    const actors = await Actor.find();
-    res.json(actors);
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.post('/api/actors', async (req, res, next) => {
-  try {
-    const actor = new Actor(req.body);
-    await actor.save();
-    logger.info(`New actor created: ${actor.name}`);
-    res.status(201).json(actor);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Producer Routes
-app.get('/api/producers', async (req, res, next) => {
-  try {
-    const producers = await Producer.find();
-    res.json(producers);
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.post('/api/producers', async (req, res, next) => {
-  try {
-    const producer = new Producer(req.body);
-    await producer.save();
-    logger.info(`New producer created: ${producer.name}`);
-    res.status(201).json(producer);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Error Handler
-app.use((err, req, res, next) => {
-  logger.error('Error:', {
-    error: err,
-    request: {
-      method: req.method,
-      path: req.path,
-      headers: req.headers,
-      body: req.body,
-    },
-  });
-
-  const statusCode = err.status || 500;
-  const errorResponse = {
-    error: err.name || 'Internal Server Error',
-    message: config.app.nodeEnv === 'development' ? err.message : 'An error occurred',
-    status: statusCode,
-    timestamp: new Date().toISOString(),
-    path: req.path,
-    version: config.app.buildVersion,
-  };
-
-  if (config.app.nodeEnv === 'development' && err.stack) {
-    errorResponse.stack = err.stack;
-  }
-
-  res.status(statusCode).json(errorResponse);
-});
-
-// Database Connection with improved error handling
-const connectDB = async (retries = 5, delay = 5000) => {
-  while (retries > 0 && !isShuttingDown) {
-    try {
-      logger.info(`Connecting to MongoDB at ${config.db.url.split('@').pop()}... (${retries} attempts remaining)`);
-      await mongoose.connect(config.db.url, config.db.options);
-      logger.info('✅ MongoDB connected successfully');
-      isDbConnected = true;
-      return true;
-    } catch (err) {
-      logger.error('❌ MongoDB connection error:', err);
-      retries--;
-      if (retries === 0) {
-        logger.error('❌ Max retries reached');
-        return false;
-      }
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-  return false;
-};
-
-// Server Startup
-const startServer = async () => {
-  try {
-    const isConnected = await connectDB();
-
-    if (!isConnected) {
-      logger.error('Failed to connect to MongoDB. Server will start but database features will be unavailable.');
-      // Allow server to start even if DB connection fails
-    }
-
-    const server = app.listen(config.app.port, '0.0.0.0', () => {
-      logger.info(`
-🚀 Server is running on port ${config.app.port}
-📦 Version: ${config.app.buildVersion}
-🔧 Environment: ${config.app.nodeEnv}
-🌐 CORS Origins: ${config.security.corsOrigins}
-🏥 Liveness: http://localhost:${config.app.port}/health/live
-🔍 Readiness: http://localhost:${config.app.port}/health/ready
-      `);
-    });
-
-    // Graceful shutdown
-    process.on('SIGINT', () => {
-      isShuttingDown = true;
-      logger.info('Shutting down server...');
-      server.close(() => {
-        mongoose.connection.close(false, () => {
-          logger.info('MongoDB connection closed.');
-          process.exit(0);
+    if (isShuttingDown) {
+        return res.status(503).json({
+            status: 'shutting_down',
+            timestamp: new Date().toISOString()
         });
-      });
-    });
+    }
 
-    // Server error handler
-    server.on('error', (err) => {
-      logger.error('Server error:', err);
-      process.exit(1);
+    const isReady = mongoose.connection.readyState === 1 && isDbConnected;
+    
+    res.status(isReady ? 200 : 503).json({
+        status: isReady ? 'ready' : 'not_ready',
+        version: config.buildVersion,
+        timestamp: new Date().toISOString(),
+        database: {
+            connected: isDbConnected,
+            state: ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoose.connection.readyState]
+        }
     });
+});
 
-    // Periodic health checks
-    setInterval(() => {
-      if (!isShuttingDown && !isDbConnected) {
-        logger.warn('Database connection check failed, attempting reconnect...');
-        connectDB(3).catch(err => logger.error('Reconnection failed:', err));
-      }
-    }, 30000); // Reduced frequency to 30 seconds
-  } catch (err) {
-    logger.error('Failed to start server:', err);
-    process.exit(1);
-  }
+// API Routes
+app.use("/api/movies", movieRouter);
+app.use("/api/actors", actorRouter);
+app.use("/api/producers", producerRouter);
+
+// MongoDB Connection
+const connectDB = async (retries = 5, delay = 5000) => {
+    while (retries > 0 && !isShuttingDown) {
+        try {
+            console.log(`Connecting to MongoDB... (${retries} attempts remaining)`);
+            
+            await mongoose.connect(config.mongoUrl, {
+                serverSelectionTimeoutMS: config.connectionTimeout,
+                connectTimeoutMS: config.connectionTimeout,
+                socketTimeoutMS: 45000,
+                retryWrites: true,
+                w: 'majority'
+            });
+
+            console.log('✅ MongoDB connected successfully');
+            isDbConnected = true;
+            return true;
+        } catch (err) {
+            console.error('❌ MongoDB connection error:', err.message);
+            retries--;
+            
+            if (retries === 0) {
+                console.error('❌ Max retries reached');
+                return false;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+    return false;
 };
 
+// MongoDB Event Handlers
+mongoose.connection.on('error', (err) => {
+    console.error('MongoDB error:', err);
+    isDbConnected = false;
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.log('MongoDB disconnected');
+    isDbConnected = false;
+    
+    if (!isShuttingDown) {
+        connectDB(3).catch(console.error);
+    }
+});
+
+mongoose.connection.on('connected', () => {
+    console.log('MongoDB connected');
+    isDbConnected = true;
+});
+
+// Error Handling
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(err.status || 500).json({
+        error: err.name || 'Internal Server Error',
+        message: config.nodeEnv === 'development' ? err.message : 'An error occurred',
+        version: config.buildVersion
+    });
+});
+
+// 404 Handler
+app.use((req, res) => {
+    res.status(404).json({
+        error: 'Not Found',
+        path: req.path,
+        method: req.method,
+        version: config.buildVersion
+    });
+});
+
+// Graceful Shutdown
+const gracefulShutdown = async (signal) => {
+    try {
+        console.log(`\n${signal} received. Starting graceful shutdown...`);
+        isShuttingDown = true;
+
+        // Stop accepting new requests (handled by middleware)
+        console.log('Stopping new requests...');
+        
+        // Wait for existing requests to complete (you might want to add a timeout)
+        await new Promise(resolve => setTimeout(resolve, 10000));
+
+        // Close MongoDB connection
+        if (mongoose.connection.readyState === 1) {
+            console.log('Closing MongoDB connection...');
+            await mongoose.connection.close();
+            console.log('MongoDB connection closed');
+        }
+
+        console.log('Graceful shutdown completed');
+        process.exit(0);
+    } catch (err) {
+        console.error('Error during shutdown:', err);
+        process.exit(1);
+    }
+};
+
+// Start Server
+const startServer = async () => {
+    try {
+        const isConnected = await connectDB();
+        
+        if (!isConnected) {
+            console.error('Failed to connect to MongoDB. Exiting...');
+            process.exit(1);
+        }
+
+        const server = app.listen(config.port, '0.0.0.0', () => {
+            console.log(`
+🚀 Server is running on port ${config.port}
+📦 Version: ${config.buildVersion}
+🔧 Environment: ${config.nodeEnv}
+🏥 Liveness: http://localhost:${config.port}/api/health/live
+🔍 Readiness: http://localhost:${config.port}/api/health/ready
+            `);
+        });
+
+        // Server error handler
+        server.on('error', (err) => {
+            console.error('Server error:', err);
+            process.exit(1);
+        });
+
+        // Periodic ready state check
+        setInterval(() => {
+            if (!isShuttingDown && !isDbConnected) {
+                console.log('Database connection check failed, attempting reconnect...');
+                connectDB(3).catch(console.error);
+            }
+        }, config.readyStateCheckInterval);
+
+    } catch (err) {
+        console.error('Failed to start server:', err);
+        process.exit(1);
+    }
+};
+
+// Process Event Handlers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+    gracefulShutdown('uncaughtException');
+});
+process.on('unhandledRejection', (err) => {
+    console.error('Unhandled Rejection:', err);
+    gracefulShutdown('unhandledRejection');
+});
+
+// Start the server
 startServer();
 
 module.exports = app;
